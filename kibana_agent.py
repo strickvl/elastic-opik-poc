@@ -224,12 +224,14 @@ def call_real_kibana_agent(
         KIBANA_USERNAME / KIBANA_PASSWORD  for basic auth
 
     Optional env vars:
-        KIBANA_AGENT_ID   defaults to "elastic-ai-agent"
-        KIBANA_SPACE      Kibana space name (omit for the default space)
+        KIBANA_AGENT_ID      defaults to "elastic-ai-agent"
+        KIBANA_SPACE         Kibana space name (omit for the default space)
+        KIBANA_CONNECTOR_ID  LLM connector to use (e.g. the Claude Sonnet 4.5 connector)
     """
     kibana_url = os.environ["KIBANA_URL"].rstrip("/")
     agent_id = os.environ.get("KIBANA_AGENT_ID", "elastic-ai-agent")
     space = os.environ.get("KIBANA_SPACE", "")
+    connector_id = os.environ.get("KIBANA_CONNECTOR_ID")
 
     path_prefix = f"/s/{space}" if space else ""
     endpoint = f"{kibana_url}{path_prefix}/api/agent_builder/converse"
@@ -270,9 +272,13 @@ def call_real_kibana_agent(
                 span.set_attribute("http.method", "POST")
                 span.set_attribute("http.url", endpoint)
 
+                body: Dict[str, Any] = {"input": input_text, "agent_id": agent_id}
+                if connector_id:
+                    body["connector_id"] = connector_id
+
                 resp = httpx.post(
                     endpoint,
-                    json={"input": input_text, "agent_id": agent_id},
+                    json=body,
                     headers=request_headers,
                     timeout=300.0,
                 )
