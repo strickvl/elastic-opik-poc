@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "03_metrics"))  # metrics
 import opik
 from opik.evaluation.metrics import AnswerRelevance, ContextPrecision, Hallucination
 
-from kibana_agent import DATASET_NAME, K, PROJECT_NAME, task_fn
+from kibana_agent import DATASET_NAME, K, PROJECT_NAME, task_fn, real_task_fn
 from metrics import F1AtK, PrecisionAtK, RecallAtK, SequenceFidelity
 
 
@@ -59,12 +59,13 @@ print(f"Config: {experiment_config}\n")
 
 results = opik.evaluate(
     dataset=dataset,
-    task=task_fn,
+    #task=task_fn,
+    task=real_task_fn,
     scoring_metrics=[
-        Hallucination(name="factuality"),
-        ContextPrecision(name="groundedness"),
-        AnswerRelevance(name="relevance"),
-        SequenceFidelity(),
+        Hallucination(model="openrouter/anthropic/claude-sonnet-4.5", name="factuality"),
+        ContextPrecision(model="openrouter/anthropic/claude-sonnet-4.5", name="groundedness"),
+        AnswerRelevance(model="openrouter/anthropic/claude-sonnet-4.5", name="relevance"),
+        SequenceFidelity(model="openrouter/anthropic/claude-sonnet-4.5"),
         PrecisionAtK(k=K),
         RecallAtK(k=K),
         F1AtK(k=K),

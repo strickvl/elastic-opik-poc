@@ -100,9 +100,10 @@ SAMPLE_QUERIES = [
 # ---------------------------------------------------------------------------
 
 class _AgentResponse:
-    def __init__(self, text: str, retrieved_documents: List[str]):
+    def __init__(self, text: str, retrieved_documents: List[str], context: Optional[List[str]] = None):
         self.text = text
         self.retrieved_documents = retrieved_documents
+        self.context = context or []
 
 
 def call_kibana_agent(
@@ -192,18 +193,21 @@ def task_fn(dataset_item: Dict) -> Dict:
         "relevant_ids": dataset_item.get("relevant_doc_ids", []),
     }
 
-def _extract_doc_ids(steps: List[Any]) -> List[str]:
-    """Pull Elasticsearch document _id values out of agent step results."""
+def _extract_docs(steps: List[Any]):
+    """Pull document IDs and highlight texts out of agent step results."""
     ids: List[str] = []
+    contexts: List[str] = []
     for step in steps:
         if step.get("type") != "tool_call":
             continue
         for result in step.get("results") or []:
-            ref = result.get("data", {}).get("reference", {})
-            doc_id = ref.get("id")
+            data = result.get("data", {})
+            doc_id = data.get("reference", {}).get("id")
             if doc_id:
                 ids.append(doc_id)
-    return ids
+                highlights = data.get("content", {}).get("highlights", [])
+                contexts.append(" ".join(highlights))
+    return ids, contexts
 
 
 def call_real_kibana_agent(
@@ -280,15 +284,31 @@ def call_real_kibana_agent(
             body = resp.json()
             answer = body.get("response", {}).get("message", "")
             steps = body.get("steps", [])
-            retrieved_ids = _extract_doc_ids(steps)
+            retrieved_ids, contexts = _extract_docs(steps)
 
             root.set_attribute("output", answer)
             root.set_attribute("opik.metadata.elasticsearch.retrieved_docs", len(retrieved_ids))
             root.set_status(Status(StatusCode.OK))
 
-            return _AgentResponse(text=answer, retrieved_documents=retrieved_ids)
+            return _AgentResponse(text=answer, retrieved_documents=retrieved_ids, context=contexts)
 
         except Exception as exc:
             root.set_status(Status(StatusCode.ERROR, str(exc)))
             root.record_exception(exc)
             raise
+
+def real_task_fn(dataset_item: Dict) -> Dict:
+    """
+    Task function for opik.evaluate(). Calls the Kibana agent and returns scored outputs.
+
+    Token counts, cost, and latency are omitted here — once the real Kibana agent
+    is wired up with OTel trace linking (05_trace_linking.py), Opik surfaces those
+    automatically from the linked trace spans.
+    """
+    response = call_real_kibana_agent(dataset_item["input"])
+    return {
+        "output": response.text,
+        "context": response.context,
+        "retrieved_ids": response.retrieved_documents,
+        "relevant_ids": dataset_item.get("relevant_doc_ids", []),
+    }
