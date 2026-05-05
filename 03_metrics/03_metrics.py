@@ -29,7 +29,7 @@ sys.path.insert(0, str(Path(__file__).parent))          # 03_metrics/
 
 from opik.evaluation.metrics import AnswerRelevance, ContextPrecision, Hallucination
 
-from kibana_agent import K, call_kibana_agent
+from kibana_agent import K, call_kibana_agent, call_real_kibana_agent
 from metrics import F1AtK, PrecisionAtK, RecallAtK, SequenceFidelity
 
 
@@ -41,16 +41,16 @@ def main():
     INPUT    = "What is ELSER and how does it enable semantic search?"
     EXPECTED = "ELSER is a sparse embedding model trained by Elastic that enables semantic search without a separate embedding service."
 
-    response = call_kibana_agent(INPUT)
+    response = call_real_kibana_agent(INPUT)
     OUTPUT   = response.text
     CONTEXT  = [str(d) for d in response.retrieved_documents]
 
     print(f"Agent output: {OUTPUT}\n")
 
-    print(Hallucination(name="factuality").score(input=INPUT, output=OUTPUT, context=CONTEXT))
-    print(ContextPrecision(name="groundedness").score(input=INPUT, output=OUTPUT, expected_output=EXPECTED, context=CONTEXT))
-    print(AnswerRelevance(name="relevance").score(input=INPUT, output=OUTPUT, context=CONTEXT))
-    print(SequenceFidelity().score(input=INPUT, output=OUTPUT))
+    print(Hallucination(model="openrouter/anthropic/claude-sonnet-4.5", name="factuality").score(input=INPUT, output=OUTPUT, context=CONTEXT))
+    print(ContextPrecision(model="openrouter/anthropic/claude-sonnet-4.5", name="groundedness").score(input=INPUT, output=OUTPUT, expected_output=EXPECTED, context=CONTEXT))
+    print(AnswerRelevance(model="openrouter/anthropic/claude-sonnet-4.5", name="relevance").score(input=INPUT, output=OUTPUT, context=CONTEXT))
+    print(SequenceFidelity(model="openrouter/anthropic/claude-sonnet-4.5").score(input=INPUT, output=OUTPUT))
 
     retrieved = response.retrieved_documents
     relevant  = ["doc-001", "doc-003", "doc-005"]
