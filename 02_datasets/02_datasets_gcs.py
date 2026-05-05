@@ -21,6 +21,7 @@ Usage:
     python 02_datasets/02_datasets.py
 """
 
+import ast
 import os
 import sys
 from pathlib import Path
@@ -53,7 +54,15 @@ print(f"Dataset ready: {dataset.name!r}\n")
 
 df = pd.read_csv(f"gs://{GCS_BUCKET}/{GCS_OBJECT}")
 
-dataset.insert_from_pandas(df)
+df["relevant_doc_ids"] = df["gt_elastic_knowledge_base"].apply(
+    lambda x: list(ast.literal_eval(x).keys()) if pd.notna(x) else []
+)
+
+dataset.insert_from_pandas(
+    df,
+    keys_mapping={"input_question": "input", "output_expected": "expected_output"},
+    ignore_keys=["gt_elastic_knowledge_base"]
+)
 print(f"Inserted {len(df)} seed items.")
 input(">>> UI: Datasets > elastic-agent-qa-v1 — confirm 5 items and version 1. Press Enter to continue.\n")
 
