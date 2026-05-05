@@ -39,14 +39,15 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from kibana_agent import PROJECT_NAME, SAMPLE_QUERIES, call_kibana_agent
+from kibana_agent import PROJECT_NAME, SAMPLE_QUERIES, call_kibana_agent, call_real_kibana_agent
 
 if __name__ == "__main__":
     print(f"Sending OTel traces to Opik project '{PROJECT_NAME}' ...\n")
 
     for i, query in enumerate(SAMPLE_QUERIES, 1):
         print(f"[{i}/{len(SAMPLE_QUERIES)}] {query}")
-        response = call_kibana_agent(query)
+        #response = call_kibana_agent(query)
+        response = call_real_kibana_agent(query)
         print(f"    -> {response.text[:80]}\n")
 
     print("Done. See 01_otel_example.md for the UI checklist.")

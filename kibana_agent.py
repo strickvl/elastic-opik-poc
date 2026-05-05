@@ -19,8 +19,9 @@ Docs: https://www.comet.com/docs/opik/tracing/integrations/opentelemetry/
 import os
 import random
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
+import httpx
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -190,3 +191,104 @@ def task_fn(dataset_item: Dict) -> Dict:
         "retrieved_ids": response.retrieved_documents,
         "relevant_ids": dataset_item.get("relevant_doc_ids", []),
     }
+
+def _extract_doc_ids(steps: List[Any]) -> List[str]:
+    """Pull Elasticsearch document _id values out of agent step results."""
+    ids: List[str] = []
+    for step in steps:
+        if step.get("type") != "tool_call":
+            continue
+        for result in step.get("results") or []:
+            ref = result.get("data", {}).get("reference", {})
+            doc_id = ref.get("id")
+            if doc_id:
+                ids.append(doc_id)
+    return ids
+
+
+def call_real_kibana_agent(
+    input_text: str,
+    headers: Optional[Dict[str, str]] = None,
+) -> _AgentResponse:
+    """
+    Call the Kibana Agent Builder converse endpoint.
+
+    Required env vars:
+        KIBANA_URL        e.g. https://my-kibana.example.com
+        KIBANA_API_KEY    Elastic API key  (preferred)
+          — or —
+        KIBANA_USERNAME / KIBANA_PASSWORD  for basic auth
+
+    Optional env vars:
+        KIBANA_AGENT_ID   defaults to "elastic-ai-agent"
+        KIBANA_SPACE      Kibana space name (omit for the default space)
+    """
+    kibana_url = os.environ["KIBANA_URL"].rstrip("/")
+    agent_id = os.environ.get("KIBANA_AGENT_ID", "elastic-ai-agent")
+    space = os.environ.get("KIBANA_SPACE", "")
+
+    path_prefix = f"/s/{space}" if space else ""
+    endpoint = f"{kibana_url}{path_prefix}/api/agent_builder/converse"
+
+    import base64
+
+    api_key = os.environ.get("KIBANA_API_KEY")
+    api_key_id = os.environ.get("KIBANA_API_KEY_ID")
+    if api_key and api_key_id:
+        # id + api_key provided separately — encode as base64(id:api_key)
+        encoded = base64.b64encode(f"{api_key_id}:{api_key}".encode()).decode()
+        auth_header = f"ApiKey {encoded}"
+    elif api_key:
+        # assume KIBANA_API_KEY is already the base64-encoded id:api_key value
+        auth_header = f"ApiKey {api_key}"
+    else:
+        username = os.environ["KIBANA_USERNAME"]
+        password = os.environ["KIBANA_PASSWORD"]
+        token = base64.b64encode(f"{username}:{password}".encode()).decode()
+        auth_header = f"Basic {token}"
+
+    request_headers = {
+        "Authorization": auth_header,
+        "kbn-xsrf": "true",
+        "Content-Type": "application/json",
+        **(headers or {}),
+    }
+
+    ctx = extract(headers or {})
+
+    with tracer.start_as_current_span("kibana.agent", context=ctx) as root:
+        root.set_attribute("input", input_text)
+        root.set_attribute("opik.tags", "elastic,kibana,real")
+        root.set_attribute("opik.metadata.agent_id", agent_id)
+
+        try:
+            with tracer.start_as_current_span("kibana.converse") as span:
+                span.set_attribute("http.method", "POST")
+                span.set_attribute("http.url", endpoint)
+
+                resp = httpx.post(
+                    endpoint,
+                    json={"input": input_text, "agent_id": agent_id},
+                    headers=request_headers,
+                    timeout=300.0,
+                )
+                resp.raise_for_status()
+
+                span.set_attribute("http.status_code", resp.status_code)
+                span.set_status(Status(StatusCode.OK))
+
+            body = resp.json()
+            answer = body.get("response", {}).get("message", "")
+            steps = body.get("steps", [])
+            retrieved_ids = _extract_doc_ids(steps)
+
+            root.set_attribute("output", answer)
+            root.set_attribute("opik.metadata.elasticsearch.retrieved_docs", len(retrieved_ids))
+            root.set_status(Status(StatusCode.OK))
+
+            return _AgentResponse(text=answer, retrieved_documents=retrieved_ids)
+
+        except Exception as exc:
+            root.set_status(Status(StatusCode.ERROR, str(exc)))
+            root.record_exception(exc)
+            raise
