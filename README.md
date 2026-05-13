@@ -7,7 +7,7 @@ A small, hands-on playbook for validating the Elastic AI Search / Kibana agent w
 Two complementary surfaces, each with a clear job:
 
 - **Opik** owns the trace store, the golden dataset (with versioning), the built-in and custom metrics, the experiments, and the per-item scores. This is where your team will spend the most time inspecting agent behaviour.
-- **ZenML** (optional) wraps the last two steps of the playbook into a single two-step pipeline. It does not replace Opik. It adds repeatable runs, captured config, run history, lineage between runs, and small handoff artifacts — a structured summary plus a clickable Opik experiment link — so the "register dataset → run trace-linked eval" flow can be triggered consistently from CI or locally.
+- **ZenML** (optional) wraps the last two steps of the playbook into a single two-step pipeline. It does not replace Opik. It adds repeatable runs, captured config, run history, lineage between runs, and customer-friendly handoff artifacts — a typed evaluation summary with JSON + HTML views, plus a clickable Opik experiment link — so the "register dataset → run trace-linked eval" flow can be triggered consistently from CI or locally.
 
 | Concern | Owned by |
 |---|---|
@@ -68,14 +68,14 @@ These scripts are deliberately readable and side-effect-heavy: Step 02 mutates t
 
 Once you have the numbered playbook understood, the ZenML pipeline lets you run Steps 02 + 05 as a single repeatable job.
 
-The ZenML code lives in a conventional small layout under `zenml_orchestration/`: step wrappers in `steps/`, the pipeline in `pipelines/`, and the dashboard HTML helper in `visualizations/`. The old `zenml_orchestration.pipeline` import path still works as a compatibility re-export.
+The ZenML code lives in a conventional small layout under `zenml_orchestration/`: step wrappers in `steps/`, the pipeline in `pipelines/`, a custom materializer in `materializers/`, and dashboard HTML helpers in `visualizations/`. The old `zenml_orchestration.pipeline` import path still works as a compatibility re-export.
 
 ### What the pipeline does
 
 Two steps, in order:
 
 1. **`register_dataset_step`** — reads the desired Opik dataset rows (from the mock seed or from GCS), compares them against what's already in Opik by `input`, and inserts / updates / skips so the run is idempotent. Note that the original Step 02 *script* intentionally mutates dataset versions to demonstrate Opik's versioning; this pipeline *step* deliberately does not, because reruns shouldn't churn versions. Returns a small summary: `inserted`, `updated`, `skipped`, `total_items_after`.
-2. **`run_trace_linked_evaluation_step`** — calls `opik.evaluate(...)` with the same metric stack as Step 05, builds an OTel `traceparent` for each dataset item, and invokes either the mock or the real Kibana agent. Returns a structured summary plus an `HTMLString` artifact with a one-click link to the Opik experiment.
+2. **`run_trace_linked_evaluation_step`** — calls `opik.evaluate(...)` with the same metric stack as Step 05, builds an OTel `traceparent` for each dataset item, and invokes either the mock or the real Kibana agent. Returns a typed `opik_evaluation_summary` artifact with both raw JSON and a clean HTML report, plus a small `HTMLString` artifact with a one-click link to the Opik experiment.
 
 The second step consumes the first step's `dataset_info` artifact, so the DAG correctly reflects the real dependency: evaluation only runs after the dataset is registered. Caching is disabled on both steps — these are real remote calls, and a cached "success" would be misleading.
 
@@ -152,6 +152,7 @@ A real pipeline run still needs Opik + judge credentials, even in mock mode, bec
 - [ ] The run has exactly two steps: `register_dataset_step` and `run_trace_linked_evaluation_step`.
 - [ ] The `opik_dataset_registration` metadata shows the expected `inserted` / `updated` / `skipped` counts. On a second run with no changes, every row should be reported as unchanged.
 - [ ] The `opik_evaluation_summary` artifact / evaluation metadata records dataset name, project name, agent mode, judge model, task threads, and the Opik experiment URL.
+- [ ] The `opik_evaluation_summary` **Visualization** tab includes the clean HTML report. Use the JSON visualization on the same artifact when you want the raw handoff payload.
 - [ ] The `opik_experiment_link` HTML artifact opens the experiment in Opik.
 
 **In Opik:**
@@ -210,11 +211,13 @@ elastic-opik-poc/
 │   └── zenml_real.yaml
 ├── zenml_orchestration/    # optional ZenML orchestration layer
 │   ├── dataset_registration.py  # runtime helper: Opik dataset registration
+│   ├── artifacts.py             # typed ZenML artifacts
 │   ├── evaluation.py            # runtime helper: Opik trace-linked eval
 │   ├── pipeline.py              # backwards-compatible re-export
+│   ├── materializers/           # custom artifact materializers + visualizations
 │   ├── pipelines/               # ZenML @pipeline definitions
 │   ├── steps/                   # ZenML @step wrappers
-│   └── visualizations/          # small dashboard HTML helper/template
+│   └── visualizations/          # small dashboard HTML helper/templates
 ├── run_zenml_pipeline.py   # CLI entrypoint for the ZenML pipeline
 └── docs/plans/             # background design notes
 ```

@@ -1,11 +1,12 @@
 """Two-step ZenML pipeline for the Elastic Opik PoC."""
 
-from typing import Any, Dict, Tuple
+from typing import Tuple
 
 from zenml import pipeline
 from zenml.config import DockerSettings
 from zenml.types import HTMLString
 
+from zenml_orchestration.artifacts import OpikEvaluationSummary
 from zenml_orchestration.evaluation import DEFAULT_EXPERIMENT_NAME, DEFAULT_JUDGE_MODEL
 from zenml_orchestration.steps import (
     register_dataset_step,
@@ -38,7 +39,7 @@ def elastic_opik_zenml_pipeline(
     task_threads: int = 1,
     judge_model: str = DEFAULT_JUDGE_MODEL,
     update_existing: bool = False,
-) -> Tuple[Dict[str, Any], HTMLString]:
+) -> Tuple[OpikEvaluationSummary, HTMLString]:
     """Register the Opik dataset, then run the trace-linked Opik evaluation."""
     dataset_info = register_dataset_step(
         source=dataset_source,

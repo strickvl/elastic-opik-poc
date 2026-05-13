@@ -1,0 +1,116 @@
+<section class="elastic-report">
+  <style>
+    .elastic-report {
+      --elastic-blue: #0077cc;
+      --elastic-pink: #f04e98;
+      --elastic-yellow: #f8d448;
+      --elastic-green: #00bfb3;
+      --ink: #1f2937;
+      --muted: #69707d;
+      --panel: #ffffff;
+      --line: #d3dae6;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      line-height: 1.45;
+      max-width: 980px;
+    }
+    .elastic-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+      background: var(--panel);
+      box-shadow: 0 14px 34px rgba(31, 41, 55, 0.08);
+    }
+    .elastic-stripe {
+      height: 8px;
+      background: linear-gradient(90deg, var(--elastic-green), var(--elastic-blue), var(--elastic-pink), var(--elastic-yellow));
+    }
+    .elastic-body { padding: 22px 24px 24px; }
+    .eyebrow {
+      color: var(--elastic-blue);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      margin: 0 0 6px;
+      text-transform: uppercase;
+    }
+    h2 { font-size: 1.45rem; margin: 0 0 6px; }
+    .subtitle { color: var(--muted); margin: 0 0 20px; }
+    .summary-grid {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(auto-fit, minmax(155px, 1fr));
+      margin-bottom: 20px;
+    }
+    .summary-item {
+      border: 1px solid #e6ebf2;
+      border-radius: 14px;
+      background: #f8fafc;
+      padding: 12px 14px;
+    }
+    .label { color: var(--muted); font-size: 0.76rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+    .value { display: block; font-size: 0.98rem; font-weight: 700; margin-top: 4px; overflow-wrap: anywhere; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 20px; }
+    .metric-pill {
+      border-radius: 999px;
+      background: rgba(0, 119, 204, 0.09);
+      border: 1px solid rgba(0, 119, 204, 0.22);
+      color: #005a9e;
+      display: inline-flex;
+      font-size: 0.84rem;
+      font-weight: 650;
+      padding: 6px 10px;
+    }
+    .trace-note {
+      border-left: 4px solid var(--elastic-green);
+      background: #f2fbfa;
+      border-radius: 10px;
+      color: #225b59;
+      margin: 16px 0 20px;
+      padding: 12px 14px;
+    }
+    .footer-row { align-items: center; display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; }
+    .elastic-button {
+      background: var(--elastic-blue);
+      border-radius: 10px;
+      color: white;
+      display: inline-block;
+      font-weight: 750;
+      padding: 10px 14px;
+      text-decoration: none;
+    }
+    .muted { color: var(--muted); }
+  </style>
+
+  <div class="elastic-card">
+    <div class="elastic-stripe"></div>
+    <div class="elastic-body">
+      <p class="eyebrow">Elastic · Opik · ZenML</p>
+      <h2>Trace-linked evaluation summary</h2>
+      <p class="subtitle">A human-readable companion to the raw <code>opik_evaluation_summary</code> artifact.</p>
+
+      <div class="summary-grid">
+        <div class="summary-item"><span class="label">Experiment</span><span class="value">$experiment_name</span></div>
+        <div class="summary-item"><span class="label">Project</span><span class="value">$project_name</span></div>
+        <div class="summary-item"><span class="label">Dataset</span><span class="value">$dataset_name</span></div>
+        <div class="summary-item"><span class="label">Agent mode</span><span class="value">$agent_mode</span></div>
+        <div class="summary-item"><span class="label">Metrics mode</span><span class="value">$metrics_mode</span></div>
+        <div class="summary-item"><span class="label">Judge model</span><span class="value">$judge_model</span></div>
+        <div class="summary-item"><span class="label">Retrieval K</span><span class="value">$retrieval_k</span></div>
+        <div class="summary-item"><span class="label">Task threads</span><span class="value">$task_threads</span></div>
+      </div>
+
+      <div class="label">Metrics configured · $metric_count</div>
+      <div class="metrics">
+        $metrics_html
+      </div>
+
+      <div class="trace-note">$trace_note</div>
+
+      <div class="footer-row">
+        $link_html
+        <span class="muted">Use Opik for per-item scores and trace inspection; use ZenML for run history and orchestration.</span>
+      </div>
+    </div>
+  </div>
+</section>
