@@ -30,10 +30,14 @@ Two complementary surfaces, each with a clear job:
 ## Setup
 
 ```bash
+cd /path/to/elastic-opik-poc
 pip install -r requirements.txt        # or: uv pip install -r requirements.txt
 cp .env.example .env
 # Fill in the values in .env — see the next section
+zenml init                             # run once from the repo root
 ```
+
+Run commands from the repo root. `zenml init` gives ZenML a source root for this project, so local runs and remote Docker builds know which files belong with the pipeline.
 
 ### Environment variables
 
@@ -64,6 +68,8 @@ These scripts are deliberately readable and side-effect-heavy: Step 02 mutates t
 
 Once you have the numbered playbook understood, the ZenML pipeline lets you run Steps 02 + 05 as a single repeatable job.
 
+The ZenML code lives in a conventional small layout under `zenml_orchestration/`: step wrappers in `steps/`, the pipeline in `pipelines/`, and the dashboard HTML helper in `visualizations/`. The old `zenml_orchestration.pipeline` import path still works as a compatibility re-export.
+
 ### What the pipeline does
 
 Two steps, in order:
@@ -78,7 +84,13 @@ The second step consumes the first step's `dataset_info` artifact, so the DAG co
 This proves the wiring works end-to-end without needing GCS or a live Kibana service. The mock agent returns random answers and random doc IDs, so the scores will not be meaningful — that's expected. What you're checking is that the pipeline shape is correct.
 
 ```bash
-uv run python run_zenml_pipeline.py \
+python run_zenml_pipeline.py --config configs/zenml_mock_smoke.yaml
+```
+
+If you prefer flags instead of YAML, this is equivalent:
+
+```bash
+python run_zenml_pipeline.py \
   --dataset-source mock \
   --agent-mode mock \
   --experiment-name elastic-agent-trace-linked-zenml-smoke
@@ -89,10 +101,15 @@ uv run python run_zenml_pipeline.py \
 After Opik, OpenRouter, GCS, and Kibana variables are configured, switch to the real dataset and the real agent:
 
 ```bash
-uv run python run_zenml_pipeline.py \
-  --dataset-source gcs \
-  --agent-mode real \
-  --experiment-name elastic-agent-real-trace-linked-zenml
+python run_zenml_pipeline.py --config configs/zenml_real.yaml
+```
+
+You can still override one config value from the CLI, for example:
+
+```bash
+python run_zenml_pipeline.py \
+  --config configs/zenml_real.yaml \
+  --experiment-name elastic-agent-real-trace-linked-zenml-2026-05-13
 ```
 
 ### CLI flags
@@ -104,8 +121,29 @@ uv run python run_zenml_pipeline.py \
 | `--experiment-name` | `elastic-agent-trace-linked-zenml` | Name shown in Opik's Experiments tab. |
 | `--task-threads` | `1` | Keep at 1 while validating trace links; raise later for speed. |
 | `--judge-model` | `openrouter/anthropic/claude-sonnet-4.5` | LLM judge passed to factuality / groundedness / relevance. |
-| `--update-existing` | off | If set, the dataset step updates changed rows instead of skipping them. |
+| `--update-existing` / `--no-update-existing` | off | If set, the dataset step updates changed rows instead of skipping them. The negative form is handy when overriding a YAML config. |
 | `--config` | — | Optional ZenML YAML config applied via `pipeline.with_options(config_path=...)`. |
+
+### Config files
+
+Two lightweight configs are included:
+
+- `configs/zenml_mock_smoke.yaml` — mock dataset + mock agent; useful for checking the orchestration shape without GCS or Kibana.
+- `configs/zenml_real.yaml` — GCS dataset + real Kibana agent; use this when real credentials and services are available.
+
+Credentials still come from environment variables / `.env`. The configs intentionally do not contain secrets, and you do not need to create ZenML secrets for this PoC. For remote real runs, `configs/zenml_real.yaml` adds only the basic GCS + Kibana runtime variables. If your environment needs optional values like `OPENROUTER_API_BASE`, `RETRIEVAL_K`, basic auth, or Kibana space/connector IDs, add those to `settings.docker.runtime_environment` in your local config.
+
+### Lightweight local validation
+
+Before making remote Opik/OpenRouter/Kibana calls, you can check that the Python modules, config files, and imports are structurally sound:
+
+```bash
+python -m compileall zenml_orchestration run_zenml_pipeline.py
+python -c "from zenml_orchestration.pipelines.elastic_opik import elastic_opik_zenml_pipeline; print(elastic_opik_zenml_pipeline.name)"
+python run_zenml_pipeline.py --help
+```
+
+A real pipeline run still needs Opik + judge credentials, even in mock mode, because `opik.evaluate(...)` and the LLM judge metrics make external calls.
 
 ### How to validate a run
 
@@ -113,7 +151,7 @@ uv run python run_zenml_pipeline.py \
 
 - [ ] The run has exactly two steps: `register_dataset_step` and `run_trace_linked_evaluation_step`.
 - [ ] The `opik_dataset_registration` metadata shows the expected `inserted` / `updated` / `skipped` counts. On a second run with no changes, every row should be reported as unchanged.
-- [ ] The `opik_evaluation` metadata records dataset name, project name, agent mode, judge model, task threads, and the Opik experiment URL.
+- [ ] The `opik_evaluation_summary` artifact / evaluation metadata records dataset name, project name, agent mode, judge model, task threads, and the Opik experiment URL.
 - [ ] The `opik_experiment_link` HTML artifact opens the experiment in Opik.
 
 **In Opik:**
@@ -167,10 +205,16 @@ elastic-opik-poc/
 ├── 04_experiments/         # Step 04 — full eval loop
 ├── 05_trace_linking/       # Step 05 — OTel → experiment trace linking
 ├── kibana_agent.py         # mock + real Kibana agent calls
-├── zenml_orchestration/    # the two-step ZenML pipeline + helpers
-│   ├── dataset_registration.py
-│   ├── evaluation.py
-│   └── pipeline.py
+├── configs/                # lightweight ZenML run configs
+│   ├── zenml_mock_smoke.yaml
+│   └── zenml_real.yaml
+├── zenml_orchestration/    # optional ZenML orchestration layer
+│   ├── dataset_registration.py  # runtime helper: Opik dataset registration
+│   ├── evaluation.py            # runtime helper: Opik trace-linked eval
+│   ├── pipeline.py              # backwards-compatible re-export
+│   ├── pipelines/               # ZenML @pipeline definitions
+│   ├── steps/                   # ZenML @step wrappers
+│   └── visualizations/          # small dashboard HTML helper/template
 ├── run_zenml_pipeline.py   # CLI entrypoint for the ZenML pipeline
 └── docs/plans/             # background design notes
 ```

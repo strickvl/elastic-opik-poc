@@ -1,0 +1,33 @@
+run_name: elastic_opik_real_eval_{date}_{time}
+
+tags:
+  - elastic
+  - opik
+  - zenml
+  - real
+  - trace-linked
+
+parameters:
+  dataset_source: gcs
+  agent_mode: real
+  experiment_name: elastic-agent-real-trace-linked-zenml
+  task_threads: 1
+  judge_model: openrouter/anthropic/claude-sonnet-4.5
+  update_existing: false
+
+settings:
+  docker:
+    runtime_environment:
+      GCS_BUCKET: ${GCS_BUCKET}
+      GCS_OBJECT: ${GCS_OBJECT}
+      KIBANA_URL: ${KIBANA_URL}
+      KIBANA_API_KEY: ${KIBANA_API_KEY}
+      # Optional real-run additions, depending on your Kibana/OpenRouter setup:
+      # OPENROUTER_API_BASE: ${OPENROUTER_API_BASE}
+      # RETRIEVAL_K: ${RETRIEVAL_K}
+      # KIBANA_API_KEY_ID: ${KIBANA_API_KEY_ID}
+      # KIBANA_USERNAME: ${KIBANA_USERNAME}
+      # KIBANA_PASSWORD: ${KIBANA_PASSWORD}
+      # KIBANA_AGENT_ID: ${KIBANA_AGENT_ID}
+      # KIBANA_SPACE: ${KIBANA_SPACE}
+      # KIBANA_CONNECTOR_ID: ${KIBANA_CONNECTOR_ID}

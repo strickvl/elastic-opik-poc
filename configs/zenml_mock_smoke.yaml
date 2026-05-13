@@ -1,0 +1,16 @@
+run_name: elastic_opik_mock_smoke_{date}_{time}
+
+tags:
+  - elastic
+  - opik
+  - zenml
+  - mock
+  - trace-linked
+
+parameters:
+  dataset_source: mock
+  agent_mode: mock
+  experiment_name: elastic-agent-trace-linked-zenml-smoke
+  task_threads: 1
+  judge_model: openrouter/anthropic/claude-sonnet-4.5
+  update_existing: false

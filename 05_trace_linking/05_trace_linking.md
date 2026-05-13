@@ -1,5 +1,7 @@
 # Step 05 — Trace Linking: UI Checklist
 
+> **Important:** the standalone script's mock path can show that `traceparent` injection works, but it cannot validate actual Opik **Trace** links. Real trace-link validation requires the real remote agent path, where Kibana receives the injected header and emits child spans back to Opik.
+
 **Docs:** [Distributed traces with OpenTelemetry](https://www.comet.com/docs/opik/tracing/advanced/log_distributed_traces#distributed-traces-with-a-remote-service-using-opentelemetry) · [Evaluate your LLM](https://www.comet.com/docs/opik/evaluation/evaluate_your_llm/)
 
 Run `python 05_trace_linking.py`, then verify in Opik UI > Experiments > elastic-agent-trace-linked.

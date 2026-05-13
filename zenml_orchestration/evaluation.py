@@ -60,11 +60,12 @@ def make_trace_linked_task(
 
     from opentelemetry.propagate import inject
 
+    agent = _load_agent(agent_mode)
+
     def trace_linked_task(dataset_item: Dict[str, Any]) -> Dict[str, Any]:
         headers: Dict[str, str] = {}
         inject(headers)
 
-        agent = _load_agent(agent_mode)
         response = agent(dataset_item["input"], headers=headers)
         context = getattr(response, "context", None) or [
             str(doc_id) for doc_id in response.retrieved_documents
