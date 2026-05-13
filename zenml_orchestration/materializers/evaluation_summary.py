@@ -44,8 +44,8 @@ class OpikEvaluationSummaryMaterializer(BaseMaterializer):
             f.write(str(render_opik_evaluation_report(data)))
 
         return {
-            self.data_path.replace("\\", "/"): VisualizationType.JSON,
             self.report_path.replace("\\", "/"): VisualizationType.HTML,
+            self.data_path.replace("\\", "/"): VisualizationType.JSON,
         }
 
     def extract_metadata(self, data: OpikEvaluationSummary) -> Dict[str, Any]:
