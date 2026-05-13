@@ -34,23 +34,24 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.trace import Status, StatusCode
 
-PROJECT_NAME = os.environ["OPIK_PROJECT_NAME"]
-DATASET_NAME = os.environ["DATASET_NAME"]
+PROJECT_NAME = os.environ.get("OPIK_PROJECT_NAME", "elastic-poc")
+DATASET_NAME = os.environ.get("DATASET_NAME", "elastic-agent-qa-v1")
 K = int(os.environ.get("RETRIEVAL_K", "3"))
 
 
 # ---------------------------------------------------------------------------
-# OTel setup — runs once on import
+# OTel setup — initialized lazily when the agent is called
 # ---------------------------------------------------------------------------
 
 def _setup_otel(service: str = "elastic-kibana-agent") -> trace.Tracer:
     api_key = os.environ["OPIK_API_KEY"]
+    project_name = os.environ.get("OPIK_PROJECT_NAME", PROJECT_NAME)
     workspace = os.environ.get("OPIK_WORKSPACE", "default")
 
     os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://www.comet.com/opik/api/v1/private/otel"
     os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = (
         f"Authorization={api_key},"
-        f"projectName={PROJECT_NAME},"
+        f"projectName={project_name},"
         f"Comet-Workspace={workspace}"
     )
 
@@ -62,7 +63,15 @@ def _setup_otel(service: str = "elastic-kibana-agent") -> trace.Tracer:
     return provider.get_tracer(__name__)
 
 
-tracer = _setup_otel()
+_tracer: Optional[trace.Tracer] = None
+
+
+def get_tracer() -> trace.Tracer:
+    """Return the local tracer, setting up the Opik OTLP exporter on first use."""
+    global _tracer
+    if _tracer is None:
+        _tracer = _setup_otel()
+    return _tracer
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +140,9 @@ def call_kibana_agent(
     """
     ctx = extract(headers or {})
 
-    with tracer.start_as_current_span("kibana.agent", context=ctx) as root:
+    active_tracer = get_tracer()
+
+    with active_tracer.start_as_current_span("kibana.agent", context=ctx) as root:
         root.set_attribute("input", input_text)
         root.set_attribute("opik.tags", "elastic,kibana,demo")
         root.set_attribute("opik.metadata.agent_version", "8.14.0")
@@ -139,7 +150,7 @@ def call_kibana_agent(
         try:
             retrieved_ids, answer_doc_id = random.choice(_QUERY_RESULTS)
 
-            with tracer.start_as_current_span("elasticsearch.search") as search:
+            with active_tracer.start_as_current_span("elasticsearch.search") as search:
                 search.set_attribute("db.system", "elasticsearch")
                 search.set_attribute("db.operation", "search")
                 search.set_attribute("elasticsearch.query", input_text)
@@ -151,7 +162,7 @@ def call_kibana_agent(
             prompt = f"Context:\n{context_text}\n\nQuestion: {input_text}"
             answer = f"Based on the retrieved documents: {_DOCS.get(answer_doc_id, '')}"
 
-            with tracer.start_as_current_span("llm.chat") as llm:
+            with active_tracer.start_as_current_span("llm.chat") as llm:
                 llm.set_attribute("gen_ai.system", "openai")
                 llm.set_attribute("gen_ai.request.model", "gpt-4o")
                 llm.set_attribute("gen_ai.response.model", "gpt-4o")
@@ -262,13 +273,15 @@ def call_real_kibana_agent(
 
     ctx = extract(headers or {})
 
-    with tracer.start_as_current_span("kibana.agent", context=ctx) as root:
+    active_tracer = get_tracer()
+
+    with active_tracer.start_as_current_span("kibana.agent", context=ctx) as root:
         root.set_attribute("input", input_text)
         root.set_attribute("opik.tags", "elastic,kibana,real")
         root.set_attribute("opik.metadata.agent_id", agent_id)
 
         try:
-            with tracer.start_as_current_span("kibana.converse") as span:
+            with active_tracer.start_as_current_span("kibana.converse") as span:
                 span.set_attribute("http.method", "POST")
                 span.set_attribute("http.url", endpoint)
 
@@ -305,7 +318,7 @@ def call_real_kibana_agent(
 
 def real_task_fn(dataset_item: Dict) -> Dict:
     """
-    Task function for opik.evaluate(). Calls the Kibana agent and returns scored outputs.
+    Task function for opik.evaluate(). Calls the real Kibana agent and returns scored outputs.
 
     Token counts, cost, and latency are omitted here — once the real Kibana agent
     is wired up with OTel trace linking (05_trace_linking.py), Opik surfaces those

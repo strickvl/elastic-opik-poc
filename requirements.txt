@@ -5,3 +5,4 @@ opentelemetry-exporter-otlp
 python-dotenv
 gcsfs
 pandas
+zenml[server]>=0.91.0

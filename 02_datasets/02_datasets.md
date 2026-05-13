@@ -9,4 +9,8 @@ Run `python 02_datasets.py`, then verify in Opik UI > Datasets > elastic-agent-q
 - [ ] Current version contains 6 items
 - [ ] First item's expected output ends with `"You can also specify mappings in the same request."`
 
-Proceed to `03_experiments.py`.
+Proceed to `03_metrics.py`.
+
+---
+
+**Running via the ZenML pipeline?** The dataset registration logic also runs as the first step of the ZenML pipeline (`register_dataset_step`), but with one deliberate difference: the pipeline is idempotent — it inserts / updates / skips rows without churning dataset versions on every rerun. This standalone script is the one that demonstrates versioning. See the **Run via ZenML** section in the top-level `README.md`.
