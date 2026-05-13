@@ -1,7 +1,5 @@
 """ZenML step for registering the Opik dataset."""
 
-from __future__ import annotations
-
 from typing import Annotated, Any, Dict
 
 from zenml import ArtifactConfig, log_metadata, step

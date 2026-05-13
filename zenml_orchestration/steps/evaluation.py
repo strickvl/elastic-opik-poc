@@ -1,7 +1,5 @@
 """ZenML step for running the trace-linked Opik evaluation."""
 
-from __future__ import annotations
-
 from typing import Annotated, Any, Dict, Tuple
 
 from zenml import ArtifactConfig, log_metadata, step

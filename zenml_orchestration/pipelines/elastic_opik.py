@@ -1,7 +1,5 @@
 """Two-step ZenML pipeline for the Elastic Opik PoC."""
 
-from __future__ import annotations
-
 from typing import Any, Dict, Tuple
 
 from zenml import pipeline
