@@ -6,7 +6,7 @@ from zenml import pipeline
 from zenml.config import DockerSettings
 from zenml.types import HTMLString
 
-from zenml_orchestration.artifacts import OpikEvaluationSummary
+from zenml_orchestration.artifacts import OpikEvaluationResults, OpikEvaluationSummary
 from zenml_orchestration.evaluation import DEFAULT_EXPERIMENT_NAME, DEFAULT_JUDGE_MODEL
 from zenml_orchestration.steps import (
     register_dataset_step,
@@ -39,17 +39,17 @@ def elastic_opik_zenml_pipeline(
     task_threads: int = 1,
     judge_model: str = DEFAULT_JUDGE_MODEL,
     update_existing: bool = False,
-) -> Tuple[OpikEvaluationSummary, HTMLString]:
+) -> Tuple[OpikEvaluationSummary, OpikEvaluationResults, HTMLString]:
     """Register the Opik dataset, then run the trace-linked Opik evaluation."""
     dataset_info = register_dataset_step(
         source=dataset_source,
         update_existing=update_existing,
     )
-    evaluation_summary, experiment_link = run_trace_linked_evaluation_step(
+    evaluation_summary, evaluation_results, experiment_link = run_trace_linked_evaluation_step(
         dataset_info=dataset_info,
         agent_mode=agent_mode,
         experiment_name=experiment_name,
         task_threads=task_threads,
         judge_model=judge_model,
     )
-    return evaluation_summary, experiment_link
+    return evaluation_summary, evaluation_results, experiment_link

@@ -7,7 +7,7 @@ A small, hands-on playbook for validating the Elastic AI Search / Kibana agent w
 Two complementary surfaces, each with a clear job:
 
 - **Opik** owns the trace store, the golden dataset (with versioning), the built-in and custom metrics, the experiments, and the per-item scores. This is where your team will spend the most time inspecting agent behaviour.
-- **ZenML** (optional) wraps the last two steps of the playbook into a single two-step pipeline. It does not replace Opik. It adds repeatable runs, captured config, run history, lineage between runs, and customer-friendly handoff artifacts — a typed evaluation summary with JSON + HTML views, plus a clickable Opik experiment link — so the "register dataset → run trace-linked eval" flow can be triggered consistently from CI or locally.
+- **ZenML** (optional) wraps the last two steps of the playbook into a single two-step pipeline. It does not replace Opik. It adds repeatable runs, captured config, run history, lineage between runs, and readable artifacts — a typed evaluation summary, detailed evaluation results with metric metadata, static HTML reports, and clickable Opik links — so the "register dataset → run trace-linked eval" flow can be triggered consistently from CI or locally.
 
 | Concern | Owned by |
 |---|---|
@@ -75,7 +75,7 @@ The ZenML code lives in a conventional small layout under `zenml_orchestration/`
 Two steps, in order:
 
 1. **`register_dataset_step`** — reads the desired Opik dataset rows (from the mock seed or from GCS), compares them against what's already in Opik by `input`, and inserts / updates / skips so the run is idempotent. Note that the original Step 02 *script* intentionally mutates dataset versions to demonstrate Opik's versioning; this pipeline *step* deliberately does not, because reruns shouldn't churn versions. Returns a small summary: `inserted`, `updated`, `skipped`, `total_items_after`.
-2. **`run_trace_linked_evaluation_step`** — calls `opik.evaluate(...)` with the same metric stack as Step 05, builds an OTel `traceparent` for each dataset item, and invokes either the mock or the real Kibana agent. Returns a typed `opik_evaluation_summary` artifact with both raw JSON and a clean HTML report, plus a small `HTMLString` artifact with a one-click link to the Opik experiment.
+2. **`run_trace_linked_evaluation_step`** — calls `opik.evaluate(...)` with the same metric stack as Step 05, builds an OTel `traceparent` for each dataset item, and invokes either the mock or the real Kibana agent. Returns three artifacts: a typed `opik_evaluation_summary` with a clean HTML report, a typed `opik_evaluation_results` artifact containing aggregate/per-item scores, and a small `HTMLString` artifact with a one-click link to the Opik experiment.
 
 The second step consumes the first step's `dataset_info` artifact, so the DAG correctly reflects the real dependency: evaluation only runs after the dataset is registered. Caching is disabled on both steps — these are real remote calls, and a cached "success" would be misleading.
 
@@ -111,6 +111,33 @@ python run_zenml_pipeline.py \
   --config configs/zenml_real.yaml \
   --experiment-name elastic-agent-real-trace-linked-zenml-2026-05-13
 ```
+
+### Static comparison report
+
+Once you have two or more fresh ZenML runs that include the `opik_evaluation_results` artifact, you can generate a separate static comparison report:
+
+```bash
+python run_zenml_comparison.py \
+  --run elastic_opik_mock_smoke_2026_05_13_13_13_04_688455 \
+  --run elastic_opik_mock_smoke_2026_05_13_13_20_10_123456 \
+  --label baseline \
+  --label candidate \
+  --output-html reports/opik-comparison.html
+```
+
+The first run is treated as the baseline. The comparison pipeline creates an `opik_evaluation_comparison` ZenML artifact with a static HTML table of metric means and deltas. `--output-html` is optional; it writes a local copy when you run locally, while the ZenML dashboard artifact is always created.
+
+If you prefer not to load directly from ZenML run names, download the `opik_evaluation_results` JSON artifact from the dashboard and pass files instead:
+
+```bash
+python run_zenml_comparison.py \
+  --result-json baseline-data.json \
+  --result-json candidate-data.json \
+  --label baseline \
+  --label candidate
+```
+
+This is intentionally static: pick the experiment variants to compare, generate a central artifact, and use links back to Opik for deeper trace investigation.
 
 ### CLI flags
 
@@ -151,8 +178,9 @@ A real pipeline run still needs Opik + judge credentials, even in mock mode, bec
 
 - [ ] The run has exactly two steps: `register_dataset_step` and `run_trace_linked_evaluation_step`.
 - [ ] The `opik_dataset_registration` metadata shows the expected `inserted` / `updated` / `skipped` counts. On a second run with no changes, every row should be reported as unchanged.
-- [ ] The `opik_evaluation_summary` artifact / evaluation metadata records dataset name, project name, agent mode, judge model, task threads, and the Opik experiment URL.
+- [ ] The `opik_evaluation_summary` artifact / evaluation metadata records dataset name, project name, agent mode, judge model, task threads, the Opik experiment URL, and metric means.
 - [ ] The `opik_evaluation_summary` **Visualization** tab includes the clean HTML report. Use the JSON visualization on the same artifact when you want the raw handoff payload.
+- [ ] The `opik_evaluation_results` artifact contains aggregate scores and per-item scores. Its metadata includes keys like `score_factuality_mean` and `score_precision_at_3_mean`, which makes it easier to compare runs inside ZenML.
 - [ ] The `opik_experiment_link` HTML artifact opens the experiment in Opik.
 
 **In Opik:**
@@ -212,12 +240,14 @@ elastic-opik-poc/
 ├── zenml_orchestration/    # optional ZenML orchestration layer
 │   ├── dataset_registration.py  # runtime helper: Opik dataset registration
 │   ├── artifacts.py             # typed ZenML artifacts
+│   ├── comparison.py            # helper: load result artifacts + build comparisons
 │   ├── evaluation.py            # runtime helper: Opik trace-linked eval
 │   ├── pipeline.py              # backwards-compatible re-export
 │   ├── materializers/           # custom artifact materializers + visualizations
 │   ├── pipelines/               # ZenML @pipeline definitions
 │   ├── steps/                   # ZenML @step wrappers
 │   └── visualizations/          # small dashboard HTML helper/templates
-├── run_zenml_pipeline.py   # CLI entrypoint for the ZenML pipeline
+├── run_zenml_pipeline.py   # CLI entrypoint for the ZenML evaluation pipeline
+├── run_zenml_comparison.py # CLI entrypoint for static comparison reports
 └── docs/plans/             # background design notes
 ```

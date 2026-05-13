@@ -1,0 +1,35 @@
+<section class="elastic-report">
+  <style>
+    .elastic-report { --elastic-blue:#0077cc; --elastic-green:#00bfb3; --elastic-pink:#f04e98; --ink:#1f2937; --muted:#69707d; --line:#d3dae6; font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; color:var(--ink); line-height:1.45; max-width:1100px; }
+    .elastic-card { border:1px solid var(--line); border-radius:18px; overflow:hidden; background:#fff; box-shadow:0 14px 34px rgba(31,41,55,.08); }
+    .elastic-stripe { height:8px; background:linear-gradient(90deg,var(--elastic-green),var(--elastic-blue),var(--elastic-pink)); }
+    .elastic-body { padding:22px 24px 24px; }
+    .eyebrow { color:var(--elastic-blue); font-size:.78rem; font-weight:700; letter-spacing:.08em; margin:0 0 6px; text-transform:uppercase; }
+    h2 { font-size:1.45rem; margin:0 0 6px; }
+    .subtitle,.muted { color:var(--muted); }
+    .score-grid { display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); margin:20px 0; }
+    .score-card { border:1px solid #e6ebf2; border-radius:14px; background:#f8fafc; padding:12px 14px; }
+    .metric-name { color:var(--muted); font-size:.75rem; font-weight:750; letter-spacing:.04em; text-transform:uppercase; }
+    .metric-value { display:block; font-size:1.35rem; font-weight:800; margin-top:4px; }
+    .failed { color:#bd271e; font-size:.78rem; margin-top:4px; }
+    table { border-collapse:collapse; margin-top:18px; width:100%; }
+    th,td { border-bottom:1px solid #e6ebf2; padding:9px 8px; text-align:left; vertical-align:top; }
+    th { color:var(--muted); font-size:.74rem; letter-spacing:.04em; text-transform:uppercase; }
+    .link { color:var(--elastic-blue); font-weight:700; }
+  </style>
+  <div class="elastic-card">
+    <div class="elastic-stripe"></div>
+    <div class="elastic-body">
+      <p class="eyebrow">Elastic · Opik · ZenML</p>
+      <h2>Evaluation results</h2>
+      <p class="subtitle">Aggregate scores and per-item outputs captured as a ZenML artifact for comparison.</p>
+      <p>$experiment_link</p>
+      <div class="score-grid">$score_cards</div>
+      <h3>Per-item scores</h3>
+      <table>
+        <thead><tr><th>Dataset item</th><th>Input</th><th>Scores</th><th>Traceparent</th></tr></thead>
+        <tbody>$item_rows</tbody>
+      </table>
+    </div>
+  </div>
+</section>

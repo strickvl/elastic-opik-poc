@@ -9,8 +9,16 @@ from zenml.enums import ArtifactType, VisualizationType
 from zenml.io import fileio
 from zenml.materializers.base_materializer import BaseMaterializer
 
-from zenml_orchestration.artifacts import OpikEvaluationSummary
-from zenml_orchestration.visualizations import render_opik_evaluation_report
+from zenml_orchestration.artifacts import (
+    OpikEvaluationComparison,
+    OpikEvaluationResults,
+    OpikEvaluationSummary,
+)
+from zenml_orchestration.visualizations import (
+    render_opik_comparison_report,
+    render_opik_evaluation_report,
+    render_opik_evaluation_results,
+)
 
 
 class OpikEvaluationSummaryMaterializer(BaseMaterializer):
@@ -51,21 +59,150 @@ class OpikEvaluationSummaryMaterializer(BaseMaterializer):
     def extract_metadata(self, data: OpikEvaluationSummary) -> Dict[str, Any]:
         """Expose the main run facts in the ZenML metadata tab."""
         summary = data.to_dict()
-        return {
+        metadata = {
             "dataset_name": summary.get("dataset_name"),
             "project_name": summary.get("project_name"),
             "experiment_name": summary.get("experiment_name"),
             "experiment_url": summary.get("experiment_url"),
+            "experiment_id": summary.get("experiment_id"),
             "agent_mode": summary.get("agent_mode"),
             "task_threads": summary.get("task_threads"),
             "judge_model": summary.get("judge_model"),
             "retrieval_k": summary.get("retrieval_k"),
             "metric_count": len(summary.get("metrics") or []),
         }
+        metadata.update(
+            {
+                f"score_{metric_name}_mean": score_mean
+                for metric_name, score_mean in (summary.get("score_means") or {}).items()
+                if score_mean is not None
+            }
+        )
+        return _metadata_without_none(metadata)
 
     def compute_content_hash(self, data: OpikEvaluationSummary) -> str:
         """Hash the JSON payload for deterministic artifact identity."""
-        hash_ = hashlib.md5(usedforsecurity=False)
-        hash_.update(self.__class__.__name__.encode())
-        hash_.update(json.dumps(data.to_dict(), sort_keys=True).encode())
-        return hash_.hexdigest()
+        return _hash_payload(self.__class__.__name__, data.to_dict())
+
+
+class OpikEvaluationResultsMaterializer(BaseMaterializer):
+    """Persist detailed Opik evaluation results as JSON plus HTML."""
+
+    ASSOCIATED_TYPES = (OpikEvaluationResults,)
+    ASSOCIATED_ARTIFACT_TYPE = ArtifactType.DATA
+
+    def __init__(self, uri: str, artifact_store: Any = None):
+        """Create stable paths for the raw JSON and HTML visualization."""
+        super().__init__(uri, artifact_store)
+        self.data_path = os.path.join(self.uri, "data.json")
+        self.report_path = os.path.join(self.uri, "evaluation_results.html")
+
+    def load(self, data_type: Type[Any]) -> OpikEvaluationResults:
+        """Load detailed evaluation results from JSON."""
+        del data_type
+        with fileio.open(self.data_path, "r") as f:
+            return OpikEvaluationResults.from_mapping(json.load(f))
+
+    def save(self, data: OpikEvaluationResults) -> None:
+        """Save detailed results as JSON."""
+        with fileio.open(self.data_path, "w") as f:
+            json.dump(data.to_dict(), f, indent=2)
+
+    def save_visualizations(
+        self, data: OpikEvaluationResults
+    ) -> Dict[str, VisualizationType]:
+        """Attach an HTML score report plus raw JSON."""
+        with fileio.open(self.report_path, "w") as f:
+            f.write(str(render_opik_evaluation_results(data)))
+        return {
+            self.report_path.replace("\\", "/"): VisualizationType.HTML,
+            self.data_path.replace("\\", "/"): VisualizationType.JSON,
+        }
+
+    def extract_metadata(self, data: OpikEvaluationResults) -> Dict[str, Any]:
+        """Expose metric means so ZenML's comparison UI can compare runs."""
+        payload = data.to_dict()
+        metadata = {
+            "dataset_name": payload.get("dataset_name"),
+            "project_name": payload.get("project_name"),
+            "experiment_name": payload.get("experiment_name"),
+            "experiment_id": payload.get("experiment_id"),
+            "experiment_url": payload.get("experiment_url"),
+            "zenml_run_name": payload.get("zenml_run_name"),
+            "agent_mode": payload.get("agent_mode"),
+            "judge_model": payload.get("judge_model"),
+            "retrieval_k": payload.get("retrieval_k"),
+            "item_count": len(payload.get("item_results") or []),
+        }
+        for metric_name, aggregate in (payload.get("aggregate_scores") or {}).items():
+            if aggregate.get("mean") is not None:
+                metadata[f"score_{metric_name}_mean"] = aggregate.get("mean")
+            metadata[f"score_{metric_name}_failed_count"] = aggregate.get("failed_count", 0)
+        return _metadata_without_none(metadata)
+
+    def compute_content_hash(self, data: OpikEvaluationResults) -> str:
+        """Hash the JSON payload for deterministic artifact identity."""
+        return _hash_payload(self.__class__.__name__, data.to_dict())
+
+
+class OpikEvaluationComparisonMaterializer(BaseMaterializer):
+    """Persist static multi-run comparison reports."""
+
+    ASSOCIATED_TYPES = (OpikEvaluationComparison,)
+    ASSOCIATED_ARTIFACT_TYPE = ArtifactType.DATA
+
+    def __init__(self, uri: str, artifact_store: Any = None):
+        """Create stable paths for the raw JSON and HTML visualization."""
+        super().__init__(uri, artifact_store)
+        self.data_path = os.path.join(self.uri, "data.json")
+        self.report_path = os.path.join(self.uri, "comparison_report.html")
+
+    def load(self, data_type: Type[Any]) -> OpikEvaluationComparison:
+        """Load a comparison report from JSON."""
+        del data_type
+        with fileio.open(self.data_path, "r") as f:
+            return OpikEvaluationComparison.from_mapping(json.load(f))
+
+    def save(self, data: OpikEvaluationComparison) -> None:
+        """Save the comparison payload as JSON."""
+        with fileio.open(self.data_path, "w") as f:
+            json.dump(data.to_dict(), f, indent=2)
+
+    def save_visualizations(
+        self, data: OpikEvaluationComparison
+    ) -> Dict[str, VisualizationType]:
+        """Attach the static HTML comparison report plus raw JSON."""
+        with fileio.open(self.report_path, "w") as f:
+            f.write(str(render_opik_comparison_report(data)))
+        return {
+            self.report_path.replace("\\", "/"): VisualizationType.HTML,
+            self.data_path.replace("\\", "/"): VisualizationType.JSON,
+        }
+
+    def extract_metadata(self, data: OpikEvaluationComparison) -> Dict[str, Any]:
+        """Expose the comparison shape in ZenML metadata."""
+        payload = data.to_dict()
+        return _metadata_without_none(
+            {
+                "baseline_label": payload.get("baseline_label"),
+                "experiment_count": len(payload.get("experiments") or []),
+                "metric_count": len(payload.get("metric_names") or []),
+                "generated_at": payload.get("generated_at"),
+            }
+        )
+
+    def compute_content_hash(self, data: OpikEvaluationComparison) -> str:
+        """Hash the JSON payload for deterministic artifact identity."""
+        return _hash_payload(self.__class__.__name__, data.to_dict())
+
+
+def _metadata_without_none(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """Remove unsupported None values before sending metadata to ZenML."""
+    return {key: value for key, value in metadata.items() if value is not None}
+
+
+def _hash_payload(materializer_name: str, payload: Dict[str, Any]) -> str:
+    hash_ = hashlib.md5(usedforsecurity=False)
+    hash_.update(materializer_name.encode())
+    hash_.update(json.dumps(payload, sort_keys=True).encode())
+    return hash_.hexdigest()
